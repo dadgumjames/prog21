@@ -1,0 +1,23 @@
+2007 brought a lot of new attention to Erlang, and with that attention has come a flurry of impromptu benchmarks. Benchmarks are tricky to write if you're new to a language, because it's easy for the run-time to be dominated by something quirky and unexpected. Consider a naive Python loop that appends data to a string each iteration. Strings are immutable in Python, so each append causes the entire string created thus far to be copied. Here's my short, but by no means complete, guide to pitfalls in benchmarking Erlang code.
+
+<b>Startup time is slow.</b> Erlang's startup time is more significant than with the other languages I use. Remember, Erlang is a whole system, not just a scripting language. A suite of modules are loaded by default; modules that make sense in most applications. If you're going to run small benchmarks, the startup time can easily dwarf your timings.
+
+<b>Garbage collection happens frequently in rapidly growing processes.</b> An Erlang process starts out very small, to keep the overall memory footprint low in a system with potentially tens of thousands of processes. Once a process heap is full, it gets promoted to a larger size. This involves allocating a new block of memory and copying all live data over to it. Eventually process heap size will stabilize, and the system automatically switches a process over to a generational garbage collector at some point too, but during that initial burst of growing from a few hundred words to a few hundred kilowords, garbage collection happens numerous times.
+
+To get around this, you can start a process with a specific heap size using <|spawn_opt|> instead of <|spawn|>. The <|min_heap_size|> option lets you choose an initial heap size in words. Even a value of 32K can significantly improve the timings of some benchmarks. No need to worry about getting the size exactly right, because it will still be automatically expanded as needed.
+
+<b>Line-oriented I/O is slow.</b> Sadly, yes, and <a href="http://www.tbray.org/ongoing/When/200x/2007/09/22/Erlang">Tim Bray</a> found this out pretty early on. Here's to hoping it's better in the future, but in the meantime any line-oriented benchmark will be dominated by I/O. Use <|file:read_file|> to load the whole file at once, if you're not dealing with gigabytes of text.
+
+<b>The more functions exported from a module, the less optimization potential.</b> It's common (and perfectly reasonable) to put:
+---
+-compile(export_all).
+---
+at the top of module that's in development. There's some nice tech in the Erlang compiler that tracks the types of variables. If a binary is always passed to a function, then that function can be specialized for operating on a binary. Once you open up a function to be called from the outside world, then all bets are off. Assumptions about the type of a parameter cannot be made.
+
+<b>Inlining is off by default</b>. I doubt you'll ever see big speedups from this, but it's worth adding
+---
+-compile(inline).
+---
+to modules that involve heavy computation.
+
+<b>Large loop indices use bignum math.</b> A "small" integer in Erlang fits into a single word, including the tag bits. I can never remember how many bits are needed for the tag, but I think it's two. (BEAM uses a staged tagging scheme so key types use fewer tag bits.) If a benchmark has an outer loop counting down from ten billion to zero, then bignum math is used for most of that range. "Bignum" means that a value is larger than will fit into a single machine word, so math involves looping and manually handling some things that an <|add|> instruction automatically takes care of. Perhaps more significantly, each bignum is heap allocated, so even simple math like <|X + 1|> where <|X|> is a bignum, causes the garbage collector to kick in more frequently.
