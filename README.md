@@ -1,6 +1,6 @@
 # prog21.dadgum.com static site generator
 
-This is what generates the [Programming in the 21st Century](http://prog21.dadgum.com) site. It's one sub-4K Perl 5 script and a similarly small template. No external libraries are used. I initially wrote it in October 2007, and it has evolved since then.
+This is what generates the [Programming in the 21st Century](http://prog21.dadgum.com) site. It's one sub-4K Perl 5 script and a similarly small template. You only need the standard Perl 5 distribution. I initially wrote it in October 2007, and it has evolved since then.
 
 The source for the first three prog21 articles is included as an example.
 
