@@ -5,7 +5,6 @@ This is what generates the [Programming in the 21st Century](http://prog21.dadgu
 The source for the first three prog21 articles is included as an example.
 
 ## Try it!
-Go into the prog21 directory and `mkdir images site`. Git doesn't handle empty directories, otherwise I'd have included them.
 
 The `gen` script builds the contents of `site`, then you can open "site/index.html" in a web browser. Generate the latest entry with:
 
