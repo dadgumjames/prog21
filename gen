@@ -1,5 +1,5 @@
-#!/usr/bin/perl
-use 5.016;
+#!/usr/bin/env perl
+use 5.20.0;
 use Cwd;
 
 my $URL = 'http://prog21.dadgum.com';
@@ -16,7 +16,7 @@ sub save {
 	}
 }
 
-my ($HEAD,$FOOT) = split /~/, "<!DOCTYPE html>\n" . load('p21.html') =~ s/\n\t*//gr;
+my ($HEAD,$BODY,$FOOT) = split /~/, load('p21.html') =~ s/\n\t*//gr;
 
 my (@Titles, @Dates);
 my $Latest = do {
@@ -26,7 +26,6 @@ my $Latest = do {
 } - 1;
 
 my @Months = qw(January February March April May June July August September October November December);
-my %Types = ('---' => 'code', '"""' => 'quote');
 
 sub long_date {
 	my ($y, $m, $d) = shift =~ /(\d+)-(\d+)-0*(\d+)/;
@@ -34,27 +33,25 @@ sub long_date {
 }
 
 sub parse {
-    my @p = split /^(---|""")\n/m, $_[0];
-	chomp for @p;
-    my @acc;
-    while (@p) {
-		my $a = shift @p;
-		if ($Types{$a}) {
-			my ($b, $c) = splice @p, 0, 2;
-			$a eq $c or die "mismatched $a\n";
-			push @acc, [$Types{$a}, $b];
-		} else {
-			push @acc, ['prose', $a];
-		}
-    }
-    @acc;
+ 	my $s = load "entries/$_[0].html";
+	my ($style, $script, @t);
+	for (;;) {
+		$s =~ m[\G\s*]smgc;
+		push(@t, ['code', $1]), next if $s =~ m[\G^---\n(.+?)\n---$]smgc;
+		push(@t, ['quote',$1]), next if $s =~ m[\G^"""\n(.+?)\n"""$]smgc;
+		$script .= $1,          next if $s =~ m[\G^<script>\n(.+?\n)</script>$]smgc;  
+		$style .= $1,           next if $s =~ m[\G^<style>\n(.+?\n)</style>$]smgc;     
+ 		push(@t, ['prose',$1]), next if $s =~ m[\G^(.+?)(?=\n---|\n"""|\n<script>|\n<style>|\Z)]smgc;
+		last;
+	}
+	($style, $script, @t); 
 }
 
 sub prose {
 	map {
 		s:<\|:<code>:g;
 		s:\|>:</code>:g;
-		/^<[phu]/ ? s/\n//gr : "<p>$_</p>"
+		/^<[phu]/ ? $_ : "<p>$_</p>"
 	} split /\n\n/, $_[0];
 }
 
@@ -68,40 +65,32 @@ sub code {
 	} @_;
 }
 
-sub gen_text {
+sub gen_body {
 	my %f = (
 		prose => sub {prose($_[0])},
 		code => sub {('<pre>', code($_[0]), '</pre>')},
 		quote => sub {('<blockquote>', prose($_[0]), '</blockquote>')}
 	);
- 	map {$f{$_->[0]}->($_->[1])} parse load "entries/@_.html";
+ 	map {$f{$_->[0]}->($_->[1])} @_;
 }
 
 sub gen_prev {
 	my ($n) = @_;
-	my @p = reverse map {qq[<li><a href="$_.html">$Titles[$_]</a>]} grep {$_ > 0} $n-5..$n-1;
-	@p ? ('<ul><h1>previously</h1>', @p, '</ul>') : ();
+	my @p = reverse map {"<li><a href=$_.html>$Titles[$_]</a>"} grep {$_ > 0} $n-5..$n-1;
+	@p ? ('<h1>previously</h1><ul>', @p, '</ul>') : ();
 }
 
 sub gen_page {
 	my ($n) = @_;
 	my $d = long_date $Dates[$n];
 	my $t = $Titles[$n];
-	my @core = ("<h1>$t</h1>", gen_text($n), qq{<p class="s"><a href="$n.html" id="perm">permalink</a> <i>$d</i></p>},
+	my ($style, $script, @doc) = parse $n;
+	my @core = ($style, $BODY, "<h1>$t</h1>", gen_body(@doc), 
+		qq{<p class="s"><a href="$n.html" id="perm">permalink</a> <i>$d</i></p>},
 		gen_prev($n), $FOOT);
+	push @core, "<script>\n", $script, "</script>" if $script;
  	save "$n.html", $HEAD =~ s/X/$t/r, @core;
 	save "index.html", $HEAD =~ s/X/Programming in the 21st Century/r, @core if $n == $Latest
-}
-
-sub gen_archive {
-	my ($last, @out);
-	for my $i (reverse 1..$Latest) {
-		my $year = substr $Dates[$i], 0, 4;
-		push @out, "<h1>$year</h1>" if $year ne $last;
-		push @out, qq|<a href="$i.html">$Titles[$i]</a>|;
-		$last = $year;
-	}
-	save "archives.html", $HEAD =~ s/X/Complete Archives/r, '<div class="ab">', @out, "</div>$FOOT";
 }
 
 my $ATOM = <<END;
@@ -122,7 +111,8 @@ sub gen_feed {
 	my $n = $Latest;
 	my $t = 'T00:00:00-06:00';
 	my @out = map {
-		my $body = join('', gen_text $_) =~ s/((href|src)=")(.+?)"/$1 . abs_url($3) . '"'/ger;
+		my ($style, $script, @doc) = parse $_;
+		my $body = join('', gen_body @doc) =~ s/((href|src)=")(.+?)"/$1 . abs_url($3) . '"'/ger;
 		my $time = "$Dates[$_]$t";
 		<<END;
 <entry>
@@ -137,6 +127,17 @@ sub gen_feed {
 END
 	} reverse grep {$_ > 0} $n-2..$n;
 	save 'atom.xml', $ATOM, "<updated>$Dates[$n]$t</updated>\n", @out, '</feed>';
+}
+
+sub gen_archive {
+	my ($last, @out);
+	for my $i (reverse 1..$Latest) {
+		my $year = substr $Dates[$i], 0, 4;
+		push @out, "<h1>$year</h1>" if $year ne $last;
+		push @out, qq|<a href=$i.html>$Titles[$i]</a>|;
+		$last = $year;
+	}
+	save "archives.html", $HEAD =~ s/X/Complete Archives/r, $BODY, '<div class="ab">',@out,"</div>", $FOOT;
 }
 
 

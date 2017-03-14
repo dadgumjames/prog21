@@ -62,9 +62,11 @@ Code line 2
 ```
 The only inline formatting is `<|` and `|>` around code, much like Markdown's backticks.
 
-### An advanced special case
+### Advanced formatting
 
-Normally a source paragraph is enclosed in HTML paragraph tags by the formatter. This doesn't happen if it already starts with an HTML paragraph tag or if it starts with a heading tag or unordered list tag. This is to allow blocks of HTML for some [special formatting](http://prog21.dadgum.com/88.html) I was already using.
+Normally a source paragraph is enclosed in HTML paragraph tags by the formatter. If it already starts with &lt;p>, &lt;pre>, &lt;ul>, &lt;h1-6>, then paragraph tags are not added. This is to allow blocks of HTML for some [special formatting](http://prog21.dadgum.com/88.html) I was already using.
+
+There are two special block types that work like `---` and `"""`, but with different delimiters: `<style>` + `</style>` and `<script>` + `</script>`. Just like the other section delimiters, each of these needs to appear on a line by itself. Style sections are merged into the stylesheet in the page header. Script sections are combined into one script at the bottom of the page. I added both of these for [Picturing WebSocket Protocol Packets](http://prog21.dadgum.com/225.html).
 
 ## File formats
 
